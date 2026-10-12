@@ -1,0 +1,32 @@
+{
+  "currency": "CNY",
+  "updated_at": "2026-09-30",
+  "source_url": "https://help.aliyun.com/zh/model-studio/model-pricing",
+  "basis": "按阿里云百炼中国内地公开目录价估算，价格单位为每百万 Token。",
+  "note": "该文件可编辑；模型价格可能变化，实际费用以阿里云百炼控制台账单为准。",
+  "models": {
+    "qwen3.7-plus": {
+      "tiers": [
+        {
+          "max_input_tokens": 256000,
+          "input_cny_per_m_tokens": 2.0,
+          "output_cny_per_m_tokens": 8.0
+        },
+        {
+          "max_input_tokens": 1000000,
+          "input_cny_per_m_tokens": 6.0,
+          "output_cny_per_m_tokens": 24.0
+        }
+      ]
+    },
+    "qwen3.8-flash": {
+      "tiers": [
+        {
+          "max_input_tokens": 1000000,
+          "input_cny_per_m_tokens": 0.8,
+          "output_cny_per_m_tokens": 2.7
+        }
+      ]
+    }
+  }
+}

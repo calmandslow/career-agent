@@ -1,0 +1,14 @@
+﻿.env
+.env.*
+!.env.example
+
+data/
+inputs/
+outputs/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+*.log
