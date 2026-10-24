@@ -12,6 +12,8 @@ FAST_SKILLS = frozenset({
 })
 
 CORE_SKILLS = frozenset({
+    "career-agent",
+    "intent-router",
     "resume-tailor",
     "interview-question-generator",
     "interview-answer-coach",

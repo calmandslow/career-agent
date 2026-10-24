@@ -11,7 +11,7 @@ def build_context(skill_name: str, state: ApplicationState) -> dict[str, Any]:
     if skill_name == "resume-tailor":
         return {
             "jd_profile": state.jd_profile,
-            "candidate_evidence": state.material_evidence,
+            "candidate_evidence": _usable_evidence(state.material_evidence),
             "output_language": _preferred_language(state.jd or ""),
         }
     if skill_name == "interview-research":
@@ -21,17 +21,19 @@ def build_context(skill_name: str, state: ApplicationState) -> dict[str, Any]:
             "jd_profile": state.jd_profile,
             "candidate_role_profile": state.candidate_role_profile,
             "interview_research_profile": state.interview_research_profile,
+            "recruitment_process": state.recruitment_process,
         }
     if skill_name == "interview-answer-coach":
         return {
             "interview_prep_profile": state.interview_prep_profile,
             "candidate_role_profile": state.candidate_role_profile,
             "jd_profile": state.jd_profile,
-            "candidate_evidence": state.material_evidence,
+            "candidate_evidence": _usable_evidence(state.material_evidence),
             "tailored_resume": state.tailored_resume_structured,
             "resume_claim_audit": state.resume_claim_audit,
             "output_language": _preferred_language(state.jd or ""),
             "answer_scope": "P0_first",
+            "recruitment_process": state.recruitment_process,
         }
     if skill_name == "mock-interview":
         return {
@@ -45,6 +47,17 @@ def build_context(skill_name: str, state: ApplicationState) -> dict[str, Any]:
             "interview_prep_profile": state.interview_prep_profile,
         }
     raise ValueError(f"Unsupported skill: {skill_name}")
+
+
+def _usable_evidence(evidence: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Keep source receipts but never send user-rejected evidence to a skill."""
+    if evidence is None:
+        return None
+    return {
+        key: [item for item in value if item.get("confirmation_status") != "rejected"]
+        if isinstance(value, list) else value
+        for key, value in evidence.items()
+    }
 
 
 def _preferred_language(text: str) -> str:

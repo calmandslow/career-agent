@@ -1,5 +1,25 @@
 # 网页接口契约
 
+## V2.0 Agent 接口
+
+- `GET /api/agent/thread?application_id=`：读取岗位级会话；不传岗位时读取普通全局会话。
+- `POST /api/agent/messages`：发送 `text` 和可选 `application_id`。返回意图、模式、计划、证据引用和待确认提案。
+- `POST /api/agent/proposals/{proposal_id}/confirm`：确认并执行一个 typed proposal。
+- `POST /api/agent/proposals/{proposal_id}/cancel`：取消提案，不修改职业数据。
+
+会话模式包括 `assistant`、`focused_training`、`mock_interview` 和 `general_chat`。用户级证据存储、岗位状态与会话记忆相互隔离。普通问答不会读取证据，也不会写入长期职业记忆。当前可确认工具包括招聘进展更新、既有生成流水线、完整模拟会话、用户补充证据和专项训练结果写回。
+
+## V1.9 新增接口
+
+- `GET /api/evidence?q=`：检索当前职业证据及最近材料变化。
+- `PATCH /api/evidence/{evidence_id}`：将证据标记为 `confirmed`、`pending` 或 `rejected`。
+- `POST /api/applications/{id}/recruitment-stages`：新增或更新任意招聘环节。
+- `DELETE /api/applications/{id}/recruitment-stages/{stage_id}`：删除招聘环节。
+- `POST /api/applications/{id}/progress-preview`：把自然语言进展转换为待确认提案，不修改状态。
+- `POST /api/applications/{id}/progress-confirm`：确认提案并更新轮次、反馈、风险与下一步诊断。
+
+`GET /api/applications/{id}` 现在还会返回 `web.recruitment_process`、`web.material_impacts` 和 `dashboard`。
+
 由 `run_web.py` 启动的 `web_app.create_app` 提供接口，前端与接口同源。不使用旧 `app.py` 的同步文本接口。无 CORS 跨站开放；本版只适用于 localhost 单用户。
 
 | 方法 | 路径 | 输入／返回 |

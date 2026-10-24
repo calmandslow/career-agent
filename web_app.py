@@ -28,6 +28,36 @@ class SessionRequest(BaseModel):count:int=Field(default=3,ge=1,le=10)
 class InterviewAction(BaseModel):
     operation:str
     answer:str=Field(default='',max_length=12000)
+class EvidenceConfirmation(BaseModel):status:str
+class RecruitmentStage(BaseModel):
+    stage_id:str|None=None
+    sequence:int|None=Field(default=None,ge=1,le=50)
+    name:str=Field(min_length=1,max_length=100)
+    stage_type:str='custom'
+    status:str='planned'
+    interviewer_role:str|None=Field(default=None,max_length=200)
+    scheduled_at:str|None=None
+    focus_areas:list[str]=Field(default_factory=list,max_length=20)
+    feedback:list[str]=Field(default_factory=list,max_length=30)
+    risks:list[str]=Field(default_factory=list,max_length=30)
+    make_current:bool=False
+class ProgressNote(BaseModel):text:str=Field(min_length=1,max_length=6000)
+class ProgressProposal(BaseModel):
+    original_text:str=Field(default='',max_length=6000)
+    passed_stage_name:str|None=Field(default=None,max_length=100)
+    next_stage_name:str|None=Field(default=None,max_length=100)
+    next_stage_type:str='business'
+    scheduled_at:str|None=None
+    scheduled_text:str|None=Field(default=None,max_length=100)
+    feedback:list[str]=Field(default_factory=list,max_length=20)
+    risks:list[str]=Field(default_factory=list,max_length=20)
+    requires_confirmation:bool=True
+    uncertainties:list[str]=Field(default_factory=list,max_length=20)
+class AgentMessage(BaseModel):
+    text:str=Field(min_length=1,max_length=12000)
+    application_id:str|None=None
+class AgentProposalAction(BaseModel):
+    application_id:str|None=None
 
 
 def create_app(root=ROOT,provider='qwen',service=None):
@@ -36,7 +66,7 @@ def create_app(root=ROOT,provider='qwen',service=None):
     async def lifespan(app):
         yield
         svc.tasks.close()
-    app=FastAPI(title='Career Agent 本地工作台',version='1.8.6.1',lifespan=lifespan)
+    app=FastAPI(title='Career Agent 本地工作台',version='2.0.0',lifespan=lifespan)
     app.state.service=svc
     @app.middleware('http')
     async def local_only(request,call_next):
@@ -60,7 +90,7 @@ def create_app(root=ROOT,provider='qwen',service=None):
     @app.get('/api/config')
     def config():
         router=ModelRouter.from_qwen_env()
-        return {'version':'1.8.6.1','provider':svc.provider,'api_key_configured':bool(os.getenv('DASHSCOPE_API_KEY')),
+        return {'version':'2.0.0','provider':svc.provider,'api_key_configured':bool(os.getenv('DASHSCOPE_API_KEY')),
                 'routes':{'fast':router.fast_model,'core':router.core_model,'review':router.model_for('answer-semantic-verifier')},
                 'max_file_mb':25,'pricing_note':'费用按本地配置估算，免费额度、未知用量未自动扣除；实际以控制台为准。'}
     @app.get('/api/materials')
@@ -82,6 +112,18 @@ def create_app(root=ROOT,provider='qwen',service=None):
             Path(path).unlink(missing_ok=True);await file.close()
     @app.post('/api/materials/{mid}/deactivate')
     def deactivate(mid:str):return svc.deactivate(mid)
+    @app.get('/api/evidence')
+    def evidence(q:str='',include_inactive:bool=False):return svc.evidence(q,include_inactive)
+    @app.patch('/api/evidence/{eid}')
+    def confirm_evidence(eid:str,body:EvidenceConfirmation):return svc.confirm_evidence(eid,body.status)
+    @app.get('/api/agent/thread')
+    def agent_thread(application_id:str|None=None):return svc.agent_thread(application_id)
+    @app.post('/api/agent/messages')
+    def agent_message(body:AgentMessage):return svc.agent_message(body.text,body.application_id)
+    @app.post('/api/agent/proposals/{proposal_id}/confirm')
+    def confirm_agent_proposal(proposal_id:str,body:AgentProposalAction):return svc.confirm_agent_proposal(proposal_id,body.application_id)
+    @app.post('/api/agent/proposals/{proposal_id}/cancel')
+    def cancel_agent_proposal(proposal_id:str,body:AgentProposalAction):return svc.cancel_agent_proposal(proposal_id,body.application_id)
     @app.get('/api/applications')
     def applications():return svc.list_apps()
     @app.post('/api/applications')
@@ -98,6 +140,14 @@ def create_app(root=ROOT,provider='qwen',service=None):
     def patch(aid:str,body:CreateJob):return svc.patch_app(aid,body.company,body.role)
     @app.put('/api/applications/{aid}/jd-profile')
     def jd_profile(aid:str,body:JDProfile):return svc.save_jd_profile(aid,body)
+    @app.post('/api/applications/{aid}/recruitment-stages')
+    def save_stage(aid:str,body:RecruitmentStage):return svc.save_stage(aid,body.model_dump())
+    @app.delete('/api/applications/{aid}/recruitment-stages/{stage_id}')
+    def delete_stage(aid:str,stage_id:str):return svc.delete_stage(aid,stage_id)
+    @app.post('/api/applications/{aid}/progress-preview')
+    def progress_preview(aid:str,body:ProgressNote):return svc.preview_progress(aid,body.text)
+    @app.post('/api/applications/{aid}/progress-confirm')
+    def progress_confirm(aid:str,body:ProgressProposal):return svc.confirm_progress(aid,body.model_dump())
     @app.post('/api/applications/{aid}/bind-materials')
     def bind(aid:str):return svc.bind_materials(aid)
     @app.put('/api/applications/{aid}/resume-draft')

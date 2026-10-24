@@ -5,3 +5,54 @@ body{margin:0;padding:24px;background:#edf1f6}body>div{max-width:1180px;margin:a
 #career-proto .job-row{display:flex;gap:5px;align-items:center}#career-proto aside .job-select{flex:1;min-width:0;overflow-wrap:anywhere}#career-proto aside .job-delete{width:auto;flex:none;font-size:12px;padding:6px;color:#b32936}#career-proto #deleted-job-list{font-size:12px}
 
 #career-proto .answer-confirmation{margin:18px 0 6px;padding:14px;background:var(--bg);border-radius:7px}#career-proto .answer-confirmation p{margin:8px 0 12px}#career-proto .prep-next{justify-content:flex-end;margin-top:24px}
+
+#career-proto .readiness-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:14px 0}
+#career-proto .readiness-card{padding:14px;background:var(--bg);border-radius:8px}
+#career-proto .meter{height:7px;background:var(--line);border-radius:10px;overflow:hidden;margin-top:8px}
+#career-proto .meter>span{display:block;height:100%;background:var(--action)}
+#career-proto .next-action{border:1px solid var(--action);background:var(--wash)}
+#career-proto .timeline{display:flex;gap:10px;overflow:auto;padding:8px 0 16px}
+#career-proto .stage-card{min-width:170px;border:1px solid var(--line);border-radius:9px;padding:14px;background:var(--paper)}
+#career-proto .stage-card.current{border-color:var(--action);box-shadow:0 0 0 2px var(--wash)}
+#career-proto .evidence-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px}
+#career-proto .evidence-card{border:1px solid var(--line);border-radius:9px;padding:16px;margin:10px 0}
+#career-proto .impact{border-left:4px solid #d58a00}
+#career-proto .status-confirmed{color:#18794e}.status-pending{color:#855e00}.status-rejected{color:#b32936}
+#career-proto .workspace-grid.single{grid-template-columns:1fr}
+@media(max-width:780px){#career-proto .evidence-layout{grid-template-columns:1fr}}
+
+#career-proto .agent-thread{scroll-behavior:smooth;padding-right:5px}
+#career-proto .message.assistant{border-left:3px solid var(--line)}
+#career-proto .message-meta{font-size:11px;color:var(--sub);margin-bottom:6px}
+#career-proto .agent-step{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+#career-proto .agent-step>span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--wash);color:var(--action);font-size:11px}
+#career-proto .agent-step p{margin:2px 0}
+#career-proto .citation{padding:9px 0;border-bottom:1px solid var(--line)}
+#career-proto .citation code{font-size:11px;color:var(--action)}
+#career-proto .citation .prose{font-size:12px;margin:4px 0}
+#career-proto .agent-suggestions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+#career-proto .agent-suggestions button{font-size:12px;padding:5px 9px}
+#career-proto .overall-score{display:block;font-size:30px;line-height:1;color:var(--action)}
+#career-proto .agent-panel{display:flex;flex-direction:column;position:sticky;top:18px;height:calc(100vh - 84px);max-height:920px}
+#career-proto .agent-panel-header{flex:none;padding-bottom:12px;border-bottom:1px solid var(--line)}
+#career-proto .agent-panel-header h2{margin:0}
+#career-proto .agent-context{margin-top:12px;padding:12px;background:var(--bg);border-radius:9px}
+#career-proto .agent-context-title{display:flex;flex-direction:column;gap:2px}
+#career-proto .agent-context-title>span{font-size:11px;color:var(--sub)}
+#career-proto .agent-context-facts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+#career-proto .agent-context-facts>span{font-size:11px;padding:3px 7px;background:var(--paper);border:1px solid var(--line);border-radius:999px}
+#career-proto .agent-context-risks{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+#career-proto .agent-context-risks>span{font-size:11px;color:#855e00;background:#fff1d0;padding:3px 7px;border-radius:5px}
+#career-proto .agent-thread{flex:1;max-height:none;min-height:220px;padding:12px 5px 12px 0}
+#career-proto .agent-composer{flex:none;border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--paper);box-shadow:0 -6px 18px color-mix(in srgb,var(--ink) 5%,transparent)}
+#career-proto .agent-composer textarea{border:0;padding:7px;min-height:70px;max-height:180px;outline:0}
+#career-proto .composer-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--sub);font-size:11px}
+#career-proto .composer-footer button{padding:7px 13px}
+#career-proto .message.optimistic{opacity:.92}
+#career-proto .message.thinking{border-left-color:var(--action)}
+#career-proto .thinking-row{display:flex;align-items:center;gap:5px;color:var(--sub)}
+#career-proto .thinking-row span{width:6px;height:6px;border-radius:50%;background:var(--action);animation:agent-pulse 1.2s infinite ease-in-out}
+#career-proto .thinking-row span:nth-child(2){animation-delay:.15s}#career-proto .thinking-row span:nth-child(3){animation-delay:.3s}
+#career-proto .thinking-row em{font-style:normal;margin-left:5px;font-size:12px}
+@keyframes agent-pulse{0%,70%,100%{opacity:.28;transform:translateY(0)}35%{opacity:1;transform:translateY(-3px)}}
+@media(max-width:1050px){#career-proto .agent-panel{position:static;height:680px;max-height:none}}

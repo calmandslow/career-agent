@@ -83,6 +83,7 @@ class ApplicationState:
     mock_interview_profile: dict[str, Any] | None = None
     interview_record: str | None = None
     interview_review_profile: dict[str, Any] | None = None
+    recruitment_process: dict[str, Any] | None = None
 
     current_stage: str = "created"
     execution_history: list[ExecutionEvent] = field(default_factory=list)

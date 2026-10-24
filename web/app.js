@@ -3,7 +3,7 @@ const $=s=>document.querySelector(s), root=$('#career-proto'), content=$('#conte
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels={analyze:'岗位分析',resume:'定制简历',questions:'生成问题',answers:'生成准备答案',review_answers:'语义审查',update_answer:'单题更新',interview:'模拟面试',parse_material:'材料解析'};
 const statusNames={created:'新建',completed:'已完成',queued:'排队中',running:'执行中',failed:'失败，可续跑',interrupted:'已中断，可续跑',waiting_for_user:'待补充或确认',ready:'已解析',parsing:'解析中',awaiting_answer:'等待回答',evaluate:'判断追问中',advance:'切换问题中',summary:'生成反馈中'};
-const S={page:'new',tab:'overview',id:localStorage.getItem('career-current-job'),app:null,jobs:[],deleted:[],materials:[],tasks:[],sessions:[],session:null,config:null,locked:false,drafts:{},jdDrafts:{},answers:{},answerFeedback:{},seen:{},polling:false,notice:null,operationScope:null,upload:null};
+const S={page:'new',tab:'overview',id:localStorage.getItem('career-current-job'),app:null,jobs:[],deleted:[],materials:[],evidence:{items:[],changes:[]},tasks:[],sessions:[],session:null,config:null,agentThread:{mode:'assistant',messages:[],pending_proposal:null,context:{scope:'global'}},agentPending:null,locked:false,drafts:{},jdDrafts:{},answers:{},answerFeedback:{},seen:{},polling:false,notice:null,operationScope:null,upload:null};
 const pageScope=()=>S.page==='workspace'?`${S.page}:${S.id}:${S.tab}:${S.tab==='mock'?S.session?.session_id||'none':''}`:S.page;
 const activeTask=t=>['queued','running'].includes(t.status);
 const busy=()=>S.locked||S.tasks.some(t=>activeTask(t)&&(S.page==='workspace'?t.application_id===S.id:S.page==='materials'?t.application_id===null:false));
@@ -90,12 +90,13 @@ function showNotice(){const el=$('#notice');const n=S.notice;el.hidden=!n||n.sco
 function notify(text,error=false,scope=S.operationScope||pageScope()){S.notice={text,error,scope};showNotice();}
 async function api(path,options={}){const {method='GET',body}=options;const response=await fetch('/api'+path,{method,headers:body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{},body:body instanceof FormData?body:body?JSON.stringify(body):undefined});let data;try{data=await response.json();}catch{throw new Error('后端响应异常，请查看终端。');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
 async function refresh(){
- [S.jobs,S.materials,S.tasks,S.deleted]=await Promise.all([api('/applications'),api('/materials'),api('/tasks'),api('/deleted-applications')]);
+ [S.jobs,S.materials,S.evidence,S.tasks,S.deleted]=await Promise.all([api('/applications'),api('/materials'),api('/evidence'),api('/tasks'),api('/deleted-applications')]);
  if(S.id&&!S.jobs.some(j=>j.application_id===S.id)){S.id=null;S.app=null;localStorage.removeItem('career-current-job');}
  if(S.id){[S.app,S.sessions]=await Promise.all([api('/applications/'+S.id),api('/applications/'+S.id+'/sessions')]);
  if(S.session&&S.session.application_id===S.id)S.session=await api(`/applications/${S.id}/sessions/${S.session.session_id}`);
  else {S.session=null;const remembered=localStorage.getItem('career-session-'+S.id);if(remembered&&S.sessions.some(h=>h.session_id===remembered))S.session=await api(`/applications/${S.id}/sessions/${remembered}`);}
  }
+ S.agentThread=await api('/agent/thread'+(S.id?'?application_id='+encodeURIComponent(S.id):''));
  render();
 }
 function progress(){
@@ -105,8 +106,29 @@ function progress(){
  if(S.page==='workspace'&&state)$('#stage').textContent=state.title;
  showNotice();
 }
-function materialCard(m){return `<div class="item"><div class="row"><strong>${esc(m.name)}</strong><span class="pill">${esc(statusNames[m.status]||m.status)} · ${m.active?'当前使用':'历史版本'}</span></div><p class="small">${m.characters} 字符 · ${esc(new Date(m.created_at).toLocaleString())}</p>${m.error?prose(m.error):''}${m.text?`<details><summary>查看提取文字</summary><div class="preview">${prose(m.text)}</div></details>`:''}${m.active?`<button data-deactivate="${m.material_id}">移出默认材料</button>`:''}</div>`;}
+function materialCard(m){return `<div class="item"><div class="row"><strong>${esc(m.name)} · v${m.version||1}</strong><span class="pill">${esc(statusNames[m.status]||m.status)} · ${m.active?'当前使用':'历史版本'}</span></div><p class="small">${m.characters} 字符 · ${esc(new Date(m.created_at).toLocaleString())}</p>${m.error?prose(m.error):''}${m.text?`<details><summary>查看提取文字</summary><div class="preview">${prose(m.text)}</div></details>`:''}${m.active?`<button data-deactivate="${m.material_id}">移出默认材料</button>`:''}</div>`;}
 function materialsPanel(kind){const items=S.materials.filter(m=>m.kind===kind&&!m.application_id);return `<section class="panel"><h2>${kind==='resume'?'基础简历':'作品集'}</h2><p class="minor">${kind==='resume'?'上传新简历后成为默认版本；旧岗位仍使用原快照。':'可上传多份；已有岗位需明确关联才能使用新材料。'}单文件 ≤25 MB。</p><input aria-label="上传${kind==='resume'?'基础简历':'作品集'}" data-upload="${kind}" type="file" accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp" ${kind==='portfolio'?'multiple':''} ${S.locked?'disabled':''}><div class="file-list">${items.filter(m=>m.active).map(materialCard).join('')||'<p>还没有当前材料。</p>'}${items.some(m=>!m.active)?`<details class="material-history"><summary>历史材料（${items.filter(m=>!m.active).length}）</summary>${items.filter(m=>!m.active).map(materialCard).join('')}</details>`:''}</div></section>`;}
+const evidenceStatus={pending:'待确认',confirmed:'已确认',rejected:'不使用'};
+function renderEvidence(){
+ const items=S.evidence.items||[],changes=S.evidence.changes||[];
+ content.innerHTML=`<div class="row"><div><h1>职业证据库</h1><p class="minor">从基础材料提取的原文证据。只有你确认过的事实才适合用于关键经历表达。</p></div><span class="badge">${items.filter(i=>i.confirmation_status==='pending').length} 条待确认</span></div><div class="evidence-layout"><section><label>搜索证据<input id="evidence-search" placeholder="例如：增长、A/B测试、跨团队"></label><div id="evidence-list">${items.map(evidenceCard).join('')||'<p>上传并解析基础简历或作品集后，会在这里生成证据。</p>'}</div></section><aside><section class="panel"><h3>最近材料变化</h3>${changes.slice(0,5).map(c=>`<div class="item"><strong>${esc(c.kind==='resume'?'基础简历':'作品集')} v${c.source_version}</strong><p class="small">新增 ${c.added_count} 条 · 移除 ${c.removed_count} 条</p></div>`).join('')||'<p class="small">还没有版本变化。</p>'}</section></aside></div>`;
+}
+function evidenceCard(item){return `<article class="evidence-card" data-evidence-card><div class="row"><strong>${esc(item.source)} · v${item.source_version}</strong><span class="status-${esc(item.confirmation_status)}">${esc(evidenceStatus[item.confirmation_status]||item.confirmation_status)}</span></div>${prose(item.text)}<p class="small">${esc(item.evidence_id)}</p><div class="actions">${item.confirmation_status!=='confirmed'?`<button data-evidence-status="confirmed" data-evidence-id="${item.evidence_id}">确认事实</button>`:''}${item.confirmation_status!=='rejected'?`<button data-evidence-status="rejected" data-evidence-id="${item.evidence_id}">不使用</button>`:''}</div></article>`;}
+function renderAgent(){
+ const panel=$('#agent-panel'),thread=$('#agent-thread'),data=S.agentThread||{mode:'assistant',messages:[]};panel.hidden=false;panel.parentElement.classList.remove('single');
+ const modeLabels={assistant:'助理模式',focused_training:'专项训练',mock_interview:'面试官模式',general_chat:'普通对话'};$('#agent-mode').textContent=modeLabels[data.mode]||'助理模式';
+ const context=data.context||{scope:'global'},contextTarget=$('#agent-context');
+ contextTarget.innerHTML=context.scope==='application'?`<div class="agent-context-title"><span>当前岗位记忆</span><strong>${esc(context.company||'待识别公司')} · ${esc(context.role||'待识别岗位')}</strong></div><div class="agent-context-facts"><span>${context.current_stage?'当前：'+esc(context.current_stage):'尚未设置轮次'}</span><span>准备度 ${Number(context.readiness||0)}%</span>${context.next_action?`<span>下一步：${esc(context.next_action)}</span>`:''}</div>${context.risks?.length?`<div class="agent-context-risks">${context.risks.map(r=>`<span>${esc(r)}</span>`).join('')}</div>`:''}`:`<div class="agent-context-title"><span>通用对话</span><strong>未绑定岗位</strong></div><p class="small">打开一个岗位后，我会自动切换到该岗位的独立记忆。</p>`;
+ const messages=(data.messages||[]).map(m=>`<div class="message ${m.role==='user'?'user':'assistant'}"><div class="message-meta">${m.role==='user'?'你':modeLabels[m.mode]||'Agent'}</div>${prose(m.content)}${m.plan?.length?`<details><summary>执行计划</summary>${m.plan.map((step,i)=>`<div class="agent-step"><span>${i+1}</span><div><strong>${esc(step.tool)}</strong><p class="small">${esc(step.reason)}</p></div></div>`).join('')}</details>`:''}${m.citations?.length?`<details><summary>引用证据（${m.citations.length}）</summary>${m.citations.map(c=>`<div class="citation"><code>${esc(c.evidence_id)}</code>${prose(c.text)}<span class="small">${esc(c.source)} · v${c.source_version}</span></div>`).join('')}</details>`:''}${m.suggested_prompts?.length?`<div class="agent-suggestions">${m.suggested_prompts.map(x=>`<button type="button" data-agent-prompt="${esc(x)}">${esc(x)}</button>`).join('')}</div>`:''}</div>`).join('');
+ const pendingMessage=S.agentPending?`<div class="message user optimistic"><div class="message-meta">你</div>${prose(S.agentPending.text)}</div><div class="message assistant thinking" aria-live="polite"><div class="message-meta">Agent · ${esc(S.agentPending.contextLabel)}</div><div class="thinking-row"><span></span><span></span><span></span><em>${esc(S.agentPending.status)}</em></div></div>`:'';
+ const p=data.pending_proposal;
+ const proposal=p?`<div class="agent-proposal"><div class="row"><strong>等待你确认</strong><span class="pill">${esc(p.kind)}</span></div><p>${esc(p.summary)}</p>${p.payload?.risks?.length?`<p class="small">风险：${esc(p.payload.risks.join('、'))}</p>`:''}<div class="agent-actions"><button class="primary" id="confirm-progress" data-proposal-id="${p.proposal_id}">确认执行</button><button id="cancel-progress" data-proposal-id="${p.proposal_id}">取消</button></div></div>`:'';
+ thread.innerHTML=messages+pendingMessage+proposal||`<div class="agent-empty"><strong>${context.scope==='application'?'已切换到当前岗位':'你可以直接描述目标'}</strong><p class="small">${context.scope==='application'?`接下来默认使用“${esc(context.company||'当前公司')} · ${esc(context.role||'当前岗位')}”的 JD、招聘进度和证据；普通问题不会写入职业档案。`:'例如：准备业务二面、开始数据归因专项训练，或者询问普通问题。普通对话不会写入职业档案。'}</p></div>`;
+ thread.scrollTop=thread.scrollHeight;
+}
+function dashboardPanel(){const d=S.app.dashboard||{overall:0,dimensions:[],actions:[],risks:[]},next=d.actions[0];return `<section class="panel"><div class="row"><div><h2>岗位准备度</h2><strong class="overall-score">${d.overall??0}%</strong></div>${d.current_stage?`<span class="badge">当前：${esc(d.current_stage.name)}</span>`:'<span class="badge warn">尚未设置招聘环节</span>'}</div><div class="readiness-grid">${d.dimensions.map(x=>`<div class="readiness-card" title="${esc((d.explanations||[]).find(e=>e.key===x.key)?.reason||'')}"><div class="row"><strong>${esc(x.label)}</strong><span>${x.score}%</span></div><div class="meter"><span style="width:${x.score}%"></span></div><p class="small">${esc((d.explanations||[]).find(e=>e.key===x.key)?.reason||'')}</p></div>`).join('')}</div>${d.latest_training?`<p class="small">最近专项训练：${esc(d.latest_training.topic)} · ${d.latest_training.average_score}/100</p>`:''}${next?`<section class="panel next-action"><span class="pill">${esc(next.priority)}</span><h3>${esc(next.title)}</h3><p>${esc(next.reason)}</p><button data-action-target="${esc(next.target)}" data-action-key="${esc(next.key)}" class="primary">开始处理</button></section>`:''}${d.risks.length?`<h3>当前风险</h3>${list(d.risks)}`:''}</section>`;}
+const stageTypeLabels={screening:'筛选',recruiter:'招聘沟通',business:'业务面试',hiring_manager:'直属主管',technical:'专业/技术面',case:'Case Study',assignment:'作业',panel:'交叉/小组面',director:'总监面',executive:'高管面',culture:'价值观面',offer:'Offer沟通',custom:'自定义'};
+function recruitmentPanel(){const process=S.app.web.recruitment_process||{stages:[]},stages=process.stages||[];return `<section class="panel"><div class="row"><div><h2>招聘进程</h2><p class="minor">每个岗位独立维护，轮次名称和类型不写死。</p></div></div><div class="timeline">${stages.map(s=>`<article class="stage-card ${s.stage_id===process.current_stage_id?'current':''}"><span class="pill">${esc(stageTypeLabels[s.stage_type]||s.stage_type)}</span><h3>${esc(s.name)}</h3><p class="small">${esc(statusNames[s.status]||({planned:'计划中',scheduled:'已安排',waiting_result:'等待结果',passed:'已通过',failed:'未通过',cancelled:'已取消'})[s.status]||s.status)}${s.scheduled_at?'<br>'+esc(new Date(s.scheduled_at).toLocaleString()):s.scheduled_text?'<br>'+esc(s.scheduled_text):''}</p>${s.feedback?.length?`<details><summary>反馈与风险</summary>${list(s.feedback)}${list(s.risks)}</details>`:''}</article>`).join('')||'<p>还没有招聘环节，可以添加已知的下一轮。</p>'}</div><details><summary>添加或更新环节</summary><form id="stage-form"><label>环节名称<input name="name" required placeholder="例如：业务二面"></label><label>环节类型<select name="stage_type">${Object.entries(stageTypeLabels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>状态<select name="status"><option value="planned">计划中</option><option value="scheduled">已安排</option><option value="waiting_result">等待结果</option><option value="passed">已通过</option><option value="failed">未通过</option><option value="cancelled">已取消</option></select></label><label>面试官身份（选填）<input name="interviewer_role"></label><label>时间（选填）<input name="scheduled_at" type="datetime-local"></label><label class="label-row"><input name="make_current" type="checkbox" checked>设为当前环节</label><button class="primary" type="submit">保存环节</button></form></details></section>`;}
 function pendingPanel(){const a=S.app;if(!a?.pending_validation_output)return '';const isResume=a.current_stage.includes('resume-tailor');if((isResume&&S.tab!=='resume')||(!isResume&&S.tab!=='prep'))return '';return `<section class="panel"><span class="badge warn">等待人工确认</span><p>这份候选尚未成为正式结果。请核对事实和提示；无法通过硬约束时，请修正源材料后重新生成。</p>${list(a.validation_issues)}${isResume?prose(resumeText(a.pending_validation_output.tailored_resume)):''}<div class="actions">${!isResume?'<button data-run="review_answers">审查现有答案</button>':''}<button id="approve">我已核对，确认当前候选</button></div></section>`;}
 function resumeText(doc){if(!doc)return '';return [doc.candidate_name,doc.target_role,doc.professional_summary?.text,...(doc.sections||[]).flatMap(s=>[s.title,...s.entries.flatMap(e=>[e.heading,e.subheading,e.date_or_location,...e.bullets.map(b=>'• '+b.text)])])].filter(Boolean).join('\n\n');}
 function render(){
@@ -120,13 +142,18 @@ function render(){
  if(S.app){$('#company-crumb').textContent=S.app.company||'待识别公司';$('#role-heading').textContent=S.app.role||'待识别岗位';$('#stage').textContent=statusNames[S.app.current_stage]||(S.app.current_stage.startsWith('waiting_for')?'待补充或确认':S.app.current_stage.startsWith('failed')?'执行失败':S.app.current_stage.startsWith('running')?'执行中':S.app.current_stage);}
  root.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===S.tab));progress();
  if(S.page==='materials')content.innerHTML='<h1>基础材料</h1><p class="minor">简历和作品集在这里统一管理，岗位使用独立快照。上传不会直接生成简历。</p>'+materialsPanel('resume')+materialsPanel('portfolio');
+ else if(S.page==='evidence')renderEvidence();
  else if(S.page==='new')content.innerHTML='<h1>新建岗位</h1><p class="minor">公司和岗位可选填，之后可根据 JD 识别结果确认。</p><form id="new-form"><label>公司名称（选填）<input name="company" maxlength="200"></label><label>岗位名称（选填）<input name="role" maxlength="200"></label><div class="hint">创建后上传 JD。基础材料会单独关联，不影响已有岗位。</div><button class="primary" type="submit">创建岗位</button></form>';
  else if(S.page==='tasks')renderTasks();
  else if(!S.app)content.innerHTML='<h1>开始你的求职准备</h1><p>先上传基础材料，再新建岗位。</p>';
- else if(S.tab==='overview')renderOverview();else if(S.tab==='resume')renderResume();else if(S.tab==='prep')renderPrep();else renderInterview();
+ else if(S.tab==='overview')renderDashboardOverview();else if(S.tab==='resume')renderResumeWithImpacts();else if(S.tab==='prep')renderInterviewProgress();else renderInterview();
  if(S.tab==='overview'&&S.page==='workspace'&&S.jdDrafts[S.id]&&$('#jd-profile-form')){for(const [name,value] of Object.entries(S.jdDrafts[S.id])){const el=$('#jd-profile-form').elements.namedItem(name);if(el)el.value=value;}$('#jd-editor').open=true;}
  if(busy())content.querySelectorAll('button:not([data-page]):not([data-tab]):not([data-session]),input[type=file]').forEach(b=>b.disabled=true);
+ renderAgent();
 }
+function renderDashboardOverview(){renderOverview();content.insertAdjacentHTML('afterbegin',dashboardPanel());}
+function renderInterviewProgress(){renderPrep();content.insertAdjacentHTML('afterbegin',recruitmentPanel());}
+function renderResumeWithImpacts(){renderResume();const impacts=(S.app.web.material_impacts||[]).filter(i=>i.status==='pending');if(impacts.length)content.insertAdjacentHTML('afterbegin',`<section class="panel impact"><h2>基础材料已更新</h2>${impacts.map(i=>`<div class="item"><strong>${esc(i.message)}</strong><p>可能需要更新：${esc(i.affected_outputs.join('、'))}</p></div>`).join('')}<p class="small">重新关联当前基础材料后，系统会保留历史记录并使依赖结果失效。</p><button id="bind" class="primary">使用当前基础材料</button></section>`);}
 function jdEditor(p){
  const field=(label,name,value,multi=false)=>`<label>${label}${multi?`<textarea name="${name}">${esc(value)}</textarea>`:`<input name="${name}" value="${esc(value)}">`}</label>`;
  const rows=(key,title)=>`<fieldset><legend>${title}</legend>${[...p[key],{item:'',priority:'',evidence:'',category:''}].map((row,i)=>`<div class="item">${field('内容（留空删除）',`${key}.${i}.item`,row.item)}${field('优先级',`${key}.${i}.priority`,row.priority)}${key==='requirements'?field('类别',`${key}.${i}.category`,row.category):''}${field('JD 原文依据',`${key}.${i}.evidence`,row.evidence)}</div>`).join('')}</fieldset>`;
@@ -151,6 +178,53 @@ async function runAction(action,payload={}){const task=await api(`/applications/
 async function interview(operation,answer=''){const task=await api(`/applications/${S.id}/sessions/${S.session.session_id}/actions`,{method:'POST',body:{operation,answer}});S.tasks.unshift(task);if(operation==='answer')S.answers[S.session.session_id]='';await refresh();}
 async function waitTask(id){for(;;){const t=await api('/tasks/'+id);const idx=S.tasks.findIndex(x=>x.task_id===id);if(idx>=0)S.tasks[idx]=t;else S.tasks.unshift(t);progress();if(!['queued','running'].includes(t.status)){if(t.status==='failed')throw new Error(t.error);return t;}await new Promise(r=>setTimeout(r,700));}}
 async function guard(work){if(S.locked)return;clearNotice();S.operationScope=pageScope();S.locked=true;content.querySelectorAll('button:not([data-page]):not([data-tab]):not([data-session]),input[type=file]').forEach(el=>el.disabled=true);try{await work();}catch(e){notify(e.message,true);}finally{S.locked=false;S.operationScope=null;S.upload=null;await refresh().catch(e=>notify('连接后端失败：'+e.message,true));}}
+root.addEventListener('keydown',e=>{
+ if(e.target.id!=='agent-input'||e.key!=='Enter'||e.shiftKey||e.isComposing||e.keyCode===229)return;
+ e.preventDefault();e.target.form?.requestSubmit();
+});
+root.addEventListener('submit',e=>{
+ if(!['agent-form','stage-form'].includes(e.target.id))return;
+ e.preventDefault();e.stopImmediatePropagation();
+ guard(async()=>{
+  if(e.target.id==='agent-form'){
+   const input=$('#agent-input'),text=input.value.trim();if(!text)throw new Error('请输入消息。');
+   const context=S.agentThread?.context||{},contextLabel=context.scope==='application'?`${context.company||'当前公司'} · ${context.role||'当前岗位'}`:'普通对话';
+   S.agentPending={text,contextLabel,status:context.scope==='application'?'正在读取当前岗位进度与相关记忆…':'正在组织回答…'};input.value='';input.disabled=true;e.target.querySelector('button[type="submit"]').disabled=true;renderAgent();
+   try{const result=await api('/agent/messages',{method:'POST',body:{text,application_id:S.id||null}});S.agentThread=result.thread;}
+   finally{S.agentPending=null;input.disabled=false;e.target.querySelector('button[type="submit"]').disabled=false;renderAgent();}
+  }else{
+   const form=Object.fromEntries(new FormData(e.target));
+   form.make_current=form.make_current==='on';form.focus_areas=[];form.feedback=[];form.risks=[];
+   form.scheduled_at=form.scheduled_at||null;form.interviewer_role=form.interviewer_role||null;
+   await api('/applications/'+S.id+'/recruitment-stages',{method:'POST',body:form});notify('招聘环节已保存，面试准备将使用新的轮次信息。');
+  }
+ });
+},true);
+root.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ const special=b.id==='confirm-progress'||b.id==='cancel-progress'||b.dataset.evidenceId||b.dataset.actionTarget||b.dataset.agentPrompt;
+ if(!special)return;e.preventDefault();e.stopImmediatePropagation();
+ if(b.dataset.agentPrompt){$('#agent-input').value=b.dataset.agentPrompt;$('#agent-input').focus();return;}
+ guard(async()=>{
+  if(b.id==='confirm-progress'){
+   const result=await api('/agent/proposals/'+b.dataset.proposalId+'/confirm',{method:'POST',body:{application_id:S.id||null}});S.agentThread=result.thread;
+   if(result.result?.task)S.tasks.unshift(result.result.task);
+   if(result.result?.session){S.session=result.result.session;localStorage.setItem('career-session-'+S.id,S.session.session_id);S.page='workspace';S.tab='mock';}
+   notify('Agent 操作已执行，结果和运行记录已保存。');
+  }else if(b.id==='cancel-progress'){
+   S.agentThread=await api('/agent/proposals/'+b.dataset.proposalId+'/cancel',{method:'POST',body:{application_id:S.id||null}});notify('操作已取消，没有修改职业数据。');
+  }else if(b.dataset.evidenceId){
+   await api('/evidence/'+b.dataset.evidenceId,{method:'PATCH',body:{status:b.dataset.evidenceStatus}});notify('证据状态已更新。');
+  }else if(b.dataset.actionTarget){
+   S.tab=b.dataset.actionTarget;S.page='workspace';
+   if(['analyze','resume','questions'].includes(b.dataset.actionKey))await runAction(b.dataset.actionKey);
+  }
+ });
+},true);
+root.addEventListener('input',e=>{
+ if(e.target.id!=='evidence-search')return;const q=e.target.value.trim().toLowerCase();
+ $('#evidence-list').innerHTML=(S.evidence.items||[]).filter(item=>!q||(item.text+' '+item.source).toLowerCase().includes(q)).map(evidenceCard).join('')||'<p>没有匹配证据。</p>';
+});
 root.addEventListener('input',e=>{if(e.target.dataset.answerFeedback!==undefined)S.answerFeedback[`${S.id}:${e.target.dataset.answerFeedback}`]=e.target.value;if(e.target.closest('#jd-profile-form'))S.jdDrafts[S.id]=Object.fromEntries(new FormData($('#jd-profile-form')));if(e.target.id==='resume-draft')S.drafts[S.id]=e.target.value;if(e.target.id==='mock-answer'&&S.session)S.answers[S.session.session_id]=e.target.value;});
 root.addEventListener('change',e=>{if(!e.target.dataset.upload)return;const kind=e.target.dataset.upload,files=Array.from(e.target.files);guard(async()=>{for(const file of files){const form=new FormData();form.append('file',file);form.append('kind',kind);if(kind==='jd')form.append('application_id',S.id);S.upload={scope:S.operationScope||pageScope(),name:file.name};progress();const r=await api('/materials',{method:'POST',body:form});S.upload=null;S.tasks.unshift(r.task);await waitTask(r.task.task_id);}notify('材料已解析并保存。');});});
 root.addEventListener('submit',e=>{e.preventDefault();guard(async()=>{const form=Object.fromEntries(new FormData(e.target));if(e.target.id==='new-form'){S.app=await api('/applications',{method:'POST',body:form});S.id=S.app.application_id;localStorage.setItem('career-current-job',S.id);S.session=null;S.page='workspace';S.tab='overview';clearNotice();}else if(e.target.id==='jd-profile-form'){await api('/applications/'+S.id+'/jd-profile',{method:'PUT',body:editedJD(form)});delete S.jdDrafts[S.id];notify('岗位修正已保存。后续生成将使用修正后的分析；已有简历和面试准备需重新生成。');}else if(e.target.id==='identity-form'){await api('/applications/'+S.id,{method:'PATCH',body:form});notify('公司和岗位已保存。');}});});
@@ -160,7 +234,7 @@ root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.di
  guard(async()=>{
  if(b.dataset.deleteJob){const id=b.dataset.deleteJob;await api('/applications/'+id,{method:'DELETE'});delete S.drafts[id];delete S.jdDrafts[id];localStorage.removeItem('career-session-'+id);if(S.id===id){S.id=null;S.app=null;S.session=null;localStorage.removeItem('career-current-job');S.page='new';S.tab='overview';}clearNotice();}
  else if(b.dataset.restoreJob){await api('/deleted-applications/'+b.dataset.restoreJob+'/restore',{method:'POST'});clearNotice();}
- else if(b.dataset.job){clearNotice();S.id=b.dataset.job;localStorage.setItem('career-current-job',S.id);S.page='workspace';S.session=null;}
+ else if(b.dataset.job){clearNotice();S.id=b.dataset.job;localStorage.setItem('career-current-job',S.id);S.page='workspace';S.session=null;const job=S.jobs.find(j=>j.application_id===S.id);S.agentPending=null;S.agentThread={mode:'assistant',messages:[],pending_proposal:null,context:{scope:'application',company:job?.company,role:job?.role,readiness:0,risks:[]}};renderAgent();}
  else if(b.dataset.run)await runAction(b.dataset.run);
  else if(b.dataset.retry){const t=await api('/tasks/'+b.dataset.retry+'/retry',{method:'POST'});S.tasks.unshift(t);clearNotice();}
  else if(b.dataset.deactivate){await api('/materials/'+b.dataset.deactivate+'/deactivate',{method:'POST'});notify('已移出；已有岗位材料快照仍保留。');}

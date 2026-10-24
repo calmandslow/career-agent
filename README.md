@@ -1,6 +1,8 @@
-本次页面补丁的更新、迁移与验收步骤见 `V1.8.6.1_RELEASE_NOTES.md`。
+# Career Agent V2.0
 
-# Career Agent V1.8.6.1
+V2.0 将 V1.9 的职业证据、动态招聘流程和准备度封装为一个可持续对话的 Agent。统一输入框可以处理求职咨询、招聘进展、生成任务、专项训练、完整模拟和普通问答；所有职业数据写入都通过可检查的确认提案完成。
+
+[V2.0 更新与验收说明](V2.0_RELEASE_NOTES.md) · [接口契约](WEB_API.md) · [V1.9 说明](V1.9_RELEASE_NOTES.md)
 
 可在本机浏览器使用的个人求职工作台：基础材料 → 岗位分析 → 定制简历 → 面试准备 → 模拟面试。
 
@@ -13,9 +15,9 @@ python run_web.py --provider qwen
 
 浏览器打开 http://127.0.0.1:8000，保持终端打开。网页无需 Node 构建，不要直接双击 HTML。
 
-离线验证：`python run_web.py --provider mock`，使用 examples 中的样例文件。
+离线验证：`python run_web.py --provider mock`，使用 `examples/v20` 中的样例对话。Mock 用于验证路由、计划和数据边界，不代表真实模型回答质量。
 
-[完整启动、迁移和验收说明](V1.8.6.1_RELEASE_NOTES.md) · [接口契约](WEB_API.md) · [历史 CLI 说明](README_LEGACY.md)
+[历史 CLI 说明](README_LEGACY.md)
 
 ## 迁移旧版
 

@@ -26,6 +26,29 @@ class MockSkillExecutor:
 
     @staticmethod
     def _fixtures(name: str, context: dict[str, Any]) -> dict[str, Any]:
+        if name == "intent-router":
+            text = str(context.get("user_message", "")).lower()
+            hypothetical = any(word in text for word in ("如果", "假如", "怎么回答", "怎么回应", "如何回答", "如何回应"))
+            progress = any(word in text for word in ("我通过了", "我过了", "已经通过", "收到反馈", "面试官觉得", "面试官认为", "下周参加"))
+            career = any(word in text for word in ("求职", "简历", "面试", "岗位", "jd", "职业", "offer", "招聘", "我的经历", "二面"))
+            intent = "update_progress" if progress and not hypothetical else ("career_consultation" if career else "general_chat")
+            return {
+                "intent": intent,
+                "scope": "current_job" if intent != "general_chat" and context.get("current_job") else "general",
+                "is_state_mutation": intent == "update_progress",
+                "confidence": 0.96,
+                "reason": "Mock semantic routing decision.",
+            }
+        if name == "career-agent":
+            general = context.get("intent") == "general_chat"
+            return {
+                "reply": (
+                    "这是普通对话，我可以回答；这段内容不会写入职业档案。"
+                    if general else
+                    "我会基于当前岗位信息回答，但不会在没有确认的情况下修改职业数据。"
+                ),
+                "suggested_prompts": ["继续说明", "回到当前岗位"],
+            }
         if name == "resume-claim-verifier":
             return {
                 "reviews": [

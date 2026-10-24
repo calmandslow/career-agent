@@ -2,6 +2,8 @@
 from __future__ import annotations
 import json
 import re
+import time
+import threading
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -70,17 +72,34 @@ class SessionStore:
     def __init__(self, root):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
     def path(self, session_id):
         if not re.fullmatch(r'mock_[a-f0-9]{12}', session_id):
             raise ValueError('Invalid session ID')
         return self.root / f'{session_id}.json'
     def save(self, session):
-        path = self.path(session['session_id'])
-        tmp = path.with_suffix('.tmp')
-        tmp.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding='utf-8')
-        tmp.replace(path)
+        with self._lock:
+            path = self.path(session['session_id'])
+            tmp = path.with_name(path.name + '.' + uuid4().hex + '.tmp')
+            tmp.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding='utf-8')
+            for attempt in range(4):
+                try:
+                    tmp.replace(path)
+                    break
+                except PermissionError:
+                    if attempt == 3:
+                        path.write_bytes(tmp.read_bytes())
+                        tmp.unlink(missing_ok=True)
+                        break
+                    time.sleep(.01 * (attempt + 1))
     def load(self, session_id):
-        return json.loads(self.path(session_id).read_text(encoding='utf-8'))
+        with self._lock:
+            path=self.path(session_id)
+            for attempt in range(4):
+                try:return json.loads(path.read_text(encoding='utf-8'))
+                except PermissionError:
+                    if attempt==3:raise
+                    time.sleep(.01*(attempt+1))
     def latest(self, application_id, provider):
         sessions = [json.loads(p.read_text(encoding='utf-8')) for p in self.root.glob('mock_*.json')]
         matching = [s for s in sessions if s['application_id'] == application_id and s['provider'] == provider]
@@ -108,7 +127,7 @@ def start_session(state, *, count=3, provider='qwen'):
         if not isinstance(entries, list): continue
         evidence[key] = []
         for entry in entries:
-            if not isinstance(entry, dict): continue
+            if not isinstance(entry, dict) or entry.get('confirmation_status')=='rejected': continue
             size = len(json.dumps(entry, ensure_ascii=False))
             if size > remaining:
                 truncated = True
@@ -118,6 +137,7 @@ def start_session(state, *, count=3, provider='qwen'):
     return {'version': '1.7.2.2', 'session_id': 'mock_' + uuid4().hex[:12],
             'application_id': state.application_id, 'provider': provider, 'created_at': utc_now(),
             'jd_profile': state.jd_profile, 'evidence': evidence, 'evidence_truncated': truncated,
+            'recruitment_process': state.recruitment_process,
             'questions': questions[:count], 'main_index': 0, 'phase': 'awaiting_answer',
             'current_kind': 'main', 'current_question': questions[0], 'turns': [],
             'decisions': [], 'feedback': None, 'llm_calls': []}
@@ -188,7 +208,7 @@ class InterviewEngine:
             self.store.save(self.session)
     def _decide(self, turn):
         s = self.session
-        context = {'jd_profile': s['jd_profile'], 'main_question': s['questions'][s['main_index']],
+        context = {'jd_profile': s['jd_profile'], 'recruitment_process': s.get('recruitment_process'), 'main_question': s['questions'][s['main_index']],
                    'candidate_answer': turn['answer']}
         cached = s.get('decision_candidate')
         if not cached or cached.get('turn_id') != turn['turn_id']:
@@ -271,7 +291,7 @@ class InterviewEngine:
                 # Bind array size to this call, not just a prompt instruction.
                 output_model = create_model('RequiredCoachFeedback', __base__=CoachFeedback,
                     questions=(list[CoachItem], Field(min_length=len(missing), max_length=len(missing))))
-                feedback = self._call('mock_interview_feedback.md', {'jd_profile': s['jd_profile'],
+                feedback = self._call('mock_interview_feedback.md', {'jd_profile': s['jd_profile'], 'recruitment_process': s.get('recruitment_process'),
                     'candidate_evidence': s['evidence'], 'evidence_truncated': s['evidence_truncated'],
                     'transcript': [t for t in valid_turns if t['main_index'] in missing],
                     'main_questions': [{'main_index':i, 'question':s['questions'][i]} for i in missing],

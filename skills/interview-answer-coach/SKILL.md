@@ -9,6 +9,10 @@ Prepare P0 questions first. Use only `candidate_evidence`, `tailored_resume`, an
 `resume_claim_audit` as factual proof. `jd_profile` and the question bank explain
 what matters but never prove that the candidate has done something.
 
+Use `recruitment_process` only to understand the current stage, interviewer focus,
+and unresolved feedback from earlier stages. It changes prioritization and depth,
+but is not candidate evidence and must never be cited as proof of experience.
+
 For each question, identify the real evaluation dimension, select the best
 evidence IDs, classify evidence as `sufficient`, `partial`, or `insufficient`,
 choose a question-appropriate structure, create a factual skeleton, and then a
